@@ -1,0 +1,31 @@
+env: dev
+
+server:
+  port: "8960"
+
+log:
+  level: "info"
+  encoding: "console"   # console/json
+  output: "stdout"      # stdout/stderr/file
+  file_path: ""         # output=file 时使用
+  time_format: ""       # 先不管
+
+db:
+  dsn: "host=127.0.0.1 user=postgres password=123456 dbname=econode port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 5m
+  slow_threshold: 300ms
+  log_level: "warn"
+
+redis:
+  addr: "127.0.0.1:6379"
+  username: ""
+  password: ""
+  db: 0
+  dial_timeout: 2s
+  read_timeout: 2s
+  write_timeout: 2s
+  pool_size: 20
+  min_idle_conns: 0
