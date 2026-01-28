@@ -2,13 +2,12 @@ package device
 
 import (
 	"econode-cloud/api/v1/device"
+	devctx "econode-cloud/internal/app/device/ctxx"
 	"econode-cloud/internal/infra/http/resp"
 	"econode-cloud/internal/pkg/bizerr"
 	"econode-cloud/internal/pkg/ctxx"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/datatypes"
 )
 
 func (h *Handler) Register(c *gin.Context) {
@@ -73,30 +72,20 @@ func (h *Handler) Activate(c *gin.Context) {
 func (h *Handler) Heartbeat(c *gin.Context) {
 	var req device.HeartbeatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid json"})
+		resp.Fail(c, bizerr.ErrParamInvalid)
 		return
-	}
-	if req.SerialNo == "" {
-		c.JSON(400, gin.H{"error": "serial_no required"})
-		return
-	}
-	if req.Payload == nil {
-		req.Payload = datatypes.JSONMap{}
 	}
 
-	// transport -> service params 映射
-	_, err := h.deviceService.Heartbeat(c.Request.Context(), HeartbeatParams{
-		SerialNo:       req.SerialNo,
-		DoorOpen:       req.DoorOpen,
-		SignalStrength: req.SignalStrength,
-		BatteryLevel:   req.BatteryLevel,
-		Weight:         req.Weight, // 先用 string，service 再 parse
-		Payload:        req.Payload,
+	err := h.deviceService.Heartbeat(c.Request.Context(), HeartbeatParams{
+		DeviceID:     devctx.DeviceID(c.Request.Context()),
+		ReportedAtMs: req.ReportedAtMs,
+		Meta:         req.Meta,
 	})
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		ctxx.Logger(c.Request.Context()).Error(err.Error())
+		resp.Fail(c, err)
 		return
 	}
 
-	c.JSON(200, device.HeartbeatResponse{ServerTime: time.Now().Unix()})
+	resp.OK(c, nil)
 }

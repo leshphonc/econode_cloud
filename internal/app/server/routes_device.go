@@ -15,7 +15,7 @@ func RegisterDeviceRoutes(api *gin.RouterGroup, h *device.Handler, auth gin.Hand
 		dev.POST("/activate", h.Activate)
 	}
 
-	authDev := api.Use(auth)
+	authDev := dev.Use(auth)
 	{
 		// 心跳
 		authDev.POST("/heartbeat", h.Heartbeat)

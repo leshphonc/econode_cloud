@@ -1,11 +1,5 @@
 package device
 
-import (
-	"time"
-
-	"gorm.io/datatypes"
-)
-
 // RegisterRequest 注册
 type RegisterRequest struct {
 	SerialNo string         `json:"serial_no" binding:"required"`
@@ -20,7 +14,7 @@ type RegisterResponse struct {
 type ActivateRequest struct {
 	SerialNo  string         `json:"serial_no" binding:"required"`
 	Model     string         `json:"model" binding:"required"`
-	PowerMode int16          `json:"power_mode" binding:"required"`
+	PowerMode int16          `json:"power_mode" binding:"required,oneof=1 2 3"`
 	HWVersion string         `json:"hw_version" binding:"required"`
 	FWVersion string         `json:"fw_version" binding:"required"`
 	ClaimCode string         `json:"claim_code" binding:"required"`
@@ -40,36 +34,7 @@ type ActivateResponse struct {
 	Meta         map[string]any `json:"meta"`
 }
 
-// HeartbeatRequest 心跳
 type HeartbeatRequest struct {
-	SerialNo string `json:"serial_no"`
-
-	// 可选运行态
-	DoorOpen       *bool  `json:"door_open"`
-	SignalStrength *int16 `json:"signal_strength"`
-	BatteryLevel   *int16 `json:"battery_level"`
-
-	Weight *string `json:"weight"`
-
-	// 扩展
-	Payload datatypes.JSONMap `json:"payload"`
-}
-
-type HeartbeatResponse struct {
-	ServerTime int64 `json:"server_time"`
-}
-
-// CreateEventRequest 事件上传
-type CreateEventRequest struct {
-	SerialNo   string         `json:"serial_no"`
-	TraceID    string         `json:"trace_id" binding:"required,uuid"`
-	OccurredAt time.Time      `json:"occurred_at" binding:"required"`
-	EventType  int16          `json:"event_type" binding:"required"`
-	Severity   int16          `json:"severity,omitempty"` // nil => default 1
-	Payload    map[string]any `json:"payload,omitempty"`  // nil => {}
-}
-
-type CreateEventResponse struct {
-	EventID    int64 `json:"event_id"`
-	Idempotent bool  `json:"idempotent"` // true 表示重复上报命中已有记录
+	ReportedAtMs *int64         `json:"reported_at_ms"`
+	Meta         map[string]any `json:"meta"`
 }

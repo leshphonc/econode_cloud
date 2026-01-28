@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +27,7 @@ func NewService(txm *txm.TxManager, deviceRepo Repo) *Service {
 }
 
 type AuthService interface {
-	AuthByDeviceUID(ctx context.Context, deviceUID string) (*IdentityResult, error)
+	AuthByDeviceUID(ctx context.Context, deviceUID string) (IdentityResult, error)
 }
 
 type IdentityResult struct {
@@ -36,19 +35,20 @@ type IdentityResult struct {
 	DeviceUID string // 外部 UUID（原 public_id）
 }
 
-func (s *Service) AuthByDeviceUID(ctx context.Context, deviceUID string) (*IdentityResult, error) {
+func (s *Service) AuthByDeviceUID(ctx context.Context, deviceUID string) (IdentityResult, error) {
 	dev, err := s.deviceRepo.GetByDeviceUID(ctx, deviceUID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrDeviceNotFound
+			return IdentityResult{}, ErrDeviceNotFound
 		}
+		return IdentityResult{}, err
 	}
 
 	if dev.DisabledAt != nil || dev.RetiredAt != nil {
-		return nil, ErrDeviceDisabled
+		return IdentityResult{}, ErrDeviceDisabled
 	}
 
-	return &IdentityResult{
+	return IdentityResult{
 		DeviceID:  dev.ID,
 		DeviceUID: dev.DeviceUID.String(),
 	}, err
@@ -144,39 +144,6 @@ func (s *Service) Activate(ctx context.Context, p ActivateParams) (ActivateResul
 
 }
 
-type UpsertDeviceBySerialNoParams struct {
-	SerialNo string
-	Meta     map[string]any
-}
-
-type UpdateDeviceStateParams struct {
-	DeviceID        int64
-	LastSeenAt      *time.Time
-	LastHeartbeatAt *time.Time
-	DoorOpen        *bool
-	SignalStrength  *int16
-	BatteryLevel    *int16
-
-	// numeric(12,3) 输入暂用 string
-	Weight decimal.Decimal
-
-	Payload datatypes.JSONMap
-}
-
-type HeartbeatParams struct {
-	SerialNo string
-
-	DoorOpen       *bool
-	SignalStrength *int16
-	BatteryLevel   *int16
-	Weight         *string // numeric(12,3) 先用 string 输入
-	Payload        datatypes.JSONMap
-}
-
-type HeartbeatResult struct {
-	DeviceID int64
-}
-
 var weightRe = regexp.MustCompile(`^\d+(\.\d{1,3})?$`)
 
 func ParseWeightKgDecimal(input string) (decimal.Decimal, error) {
@@ -201,60 +168,49 @@ func ParseWeightKgDecimal(input string) (decimal.Decimal, error) {
 	return d, nil
 }
 
-func (s *Service) Heartbeat(ctx context.Context, p HeartbeatParams) (HeartbeatResult, error) {
-	if p.SerialNo == "" {
-		return HeartbeatResult{}, errors.New("serial_no required")
-	}
+type HeartbeatParams struct {
+	DeviceID     int64
+	ReportedAtMs *int64
+	Meta         map[string]any
+}
 
-	now := time.Now()
+func (s *Service) Heartbeat(ctx context.Context, p HeartbeatParams) error {
 
-	var res HeartbeatResult
 	err := s.txm.Transaction(ctx, func(tx *gorm.DB) error {
-		deviceRepo := s.deviceRepo.WithDB(tx)
+		devRepo := s.deviceRepo.WithDB(tx)
 
-		// 1) 查设备（按 serial_no）
-		dev, err := deviceRepo.GetBySerialNo(ctx, p.SerialNo)
+		// 1) 落 heartbeat 表
+		now := time.Now()
+		var reportedAt *time.Time
+		if p.ReportedAtMs != nil {
+			t := time.UnixMilli(*p.ReportedAtMs)
+			// 可选：做时间合理性校验，不合理就丢弃
+			if t.After(now.Add(5*time.Minute)) || t.Before(now.Add(-365*24*time.Hour)) {
+				reportedAt = nil
+			} else {
+				reportedAt = &t
+			}
+			reportedAt = &t
+		}
+		hb := model.Heartbeat{
+			DeviceID:   p.DeviceID,
+			ReportedAt: reportedAt,
+			Meta:       p.Meta,
+		}
+		err := devRepo.InsertHeartbeat(ctx, &hb)
 		if err != nil {
 			return err
 		}
-		if dev == nil {
-			return errors.New("device not found")
-		}
-		res.DeviceID = dev.ID
 
-		// 2) 确保 device_state 存在
-		if err = s.deviceRepo.EnsureDeviceState(ctx, dev.ID, &now); err != nil {
+		// 2) 更新 device.last_seen_at
+		if err = devRepo.TouchLastSeen(ctx, p.DeviceID, &hb.CreatedAt); err != nil {
 			return err
 		}
 
-		// 3) 更新 device.last_seen_at
-		if err = s.deviceRepo.TouchLastSeen(ctx, dev.ID, &now); err != nil {
-			return err
-		}
-
-		// 4) 更新 device_state
-		kgDecimal, err := ParseWeightKgDecimal(*p.Weight)
-		if err != nil {
-			return err
-		}
-		if err = s.deviceRepo.UpdateDeviceStateByHeartbeat(ctx, UpdateDeviceStateParams{
-			DeviceID:        dev.ID,
-			LastSeenAt:      &now,
-			LastHeartbeatAt: &now,
-			DoorOpen:        p.DoorOpen,
-			SignalStrength:  p.SignalStrength,
-			BatteryLevel:    p.BatteryLevel,
-			Weight:          kgDecimal,
-			Payload:         p.Payload,
-		}); err != nil {
-			return err
-		}
-
-		// 5) (可选) 落 heartbeat 表：你如果 heartbeat.sql 已建，我下一步可以补
 		return nil
 	})
 	if err != nil {
-		return HeartbeatResult{}, err
+		return err
 	}
-	return res, nil
+	return nil
 }
