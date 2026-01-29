@@ -5,21 +5,21 @@ create table event
     -- 逻辑外键：所属设备
     device_id   bigint not null,
 
-    -- 事件类型：1-状态 2-错误 3-告警 4-投递 5-维护 6-调试
+    -- 事件类型：1-状态(status)  2-错误(error) 3-警报(alert) 4-投递(delivery) 5-维护(maintenance) 6-调试(debug)
     type        smallint not null
         constraint event_type_ck check (type = any (array[1,2,3,4,5,6])),
 
-    -- 事件动作：1-发生/抛出(raise) 2-恢复/修复(fix) 3-更新(update)
+    -- 事件动作：1-抛出(raise) 2-恢复(fix) 3-更新(update)
     -- 对“错误类事件”建议只用 1/2
     action      smallint not null
         constraint event_action_ck check (action = any (array[1,2,3])),
 
-    -- 事件码：如 TOF_TIMEOUT / HX711_DRIFT / DOOR_OPEN 等
-    code        text not null,
-
     -- 严重级别：1-debug 2-info 3-warn 4-error 5-critical
     severity    smallint not null
         constraint event_severity_ck check (severity = any (array[1,2,3,4,5])),
+
+    -- 事件码：如 TOF_TIMEOUT / HX711_DRIFT / DOOR_OPEN 等
+    code        text not null,
 
     -- 可选：幂等去重（设备侧生成 UUID/雪花/递增序号等）
     -- 同一设备同一 event_uid 只入库一次
@@ -28,10 +28,7 @@ create table event
     -- 附加数据：传感器读数、错误上下文、门状态、重量等
     meta        jsonb not null default '{}'::jsonb,
 
-    -- 设备自报：事件发生时间（可空）
-    occurred_at timestamptz,
-
-    -- 设备自报：上报时间（可空）
+    -- 设备自报：设备视角时间
     reported_at timestamptz,
 
     -- 服务端入库时间（可信）

@@ -4,6 +4,7 @@ import (
 	"context"
 	"econode-cloud/internal/model"
 	"econode-cloud/internal/pkg/nullable"
+	"econode-cloud/internal/pkg/timeutil"
 	"econode-cloud/internal/pkg/txm"
 	"errors"
 	"regexp"
@@ -65,7 +66,7 @@ type RegisterResult struct {
 }
 
 func (s *Service) Register(ctx context.Context, p RegisterParams) (RegisterResult, error) {
-	dev, err := s.deviceRepo.Register(ctx, p.SerialNo, p.Meta)
+	dev, err := s.deviceRepo.GetOrCreateBySerialNo(ctx, p.SerialNo, p.Meta)
 	if err != nil {
 		return RegisterResult{}, ErrDeviceRegisterFailed
 	}
@@ -76,13 +77,13 @@ func (s *Service) Register(ctx context.Context, p RegisterParams) (RegisterResul
 	}, nil
 }
 
-type ActivateParams struct {
+type ClaimParams struct {
 	SerialNo  string
+	ClaimCode string
 	Model     string
 	PowerMode int16
 	HWVersion string
 	FWVersion string
-	ClaimCode string
 	Meta      map[string]any
 }
 
@@ -114,14 +115,14 @@ func mapPowerMode(i int16) (v model.DevicePowerMode, err error) {
 	return
 }
 
-func (s *Service) Activate(ctx context.Context, p ActivateParams) (ActivateResult, error) {
+func (s *Service) Activate(ctx context.Context, p ClaimParams) (ActivateResult, error) {
 	pw, err := mapPowerMode(p.PowerMode)
 	if err != nil {
 		return ActivateResult{}, err
 	}
 	p.PowerMode = int16(pw)
 
-	dev, err := s.deviceRepo.Activate(ctx, p)
+	dev, err := s.deviceRepo.ClaimBySerialNo(ctx, p)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ActivateResult{}, ErrDeviceActivateFailed
@@ -180,30 +181,19 @@ func (s *Service) Heartbeat(ctx context.Context, p HeartbeatParams) error {
 		devRepo := s.deviceRepo.WithDB(tx)
 
 		// 1) 落 heartbeat 表
-		now := time.Now()
-		var reportedAt *time.Time
-		if p.ReportedAtMs != nil {
-			t := time.UnixMilli(*p.ReportedAtMs)
-			// 可选：做时间合理性校验，不合理就丢弃
-			if t.After(now.Add(5*time.Minute)) || t.Before(now.Add(-365*24*time.Hour)) {
-				reportedAt = nil
-			} else {
-				reportedAt = &t
-			}
-			reportedAt = &t
-		}
+		reportedAt := timeutil.NormalizeReportedAt(p.ReportedAtMs, time.Now(), 5*time.Minute, 365*24*time.Hour)
 		hb := model.Heartbeat{
 			DeviceID:   p.DeviceID,
 			ReportedAt: reportedAt,
 			Meta:       p.Meta,
 		}
-		err := devRepo.InsertHeartbeat(ctx, &hb)
+		err := devRepo.CreateHeartbeat(ctx, &hb)
 		if err != nil {
 			return err
 		}
 
 		// 2) 更新 device.last_seen_at
-		if err = devRepo.TouchLastSeen(ctx, p.DeviceID, &hb.CreatedAt); err != nil {
+		if err = devRepo.UpdateLastSeenAt(ctx, p.DeviceID, hb.CreatedAt); err != nil {
 			return err
 		}
 

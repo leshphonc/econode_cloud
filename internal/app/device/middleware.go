@@ -1,7 +1,7 @@
 package device
 
 import (
-	"econode-cloud/internal/app/device/ctxx"
+	"econode-cloud/internal/app/device/ctxdev"
 	"econode-cloud/internal/infra/http/resp"
 	"strings"
 
@@ -42,8 +42,8 @@ func AuthDevice(svc AuthService) gin.HandlerFunc {
 		}
 
 		// 3) ctx 放入 device_identity
-		ctx := ctxx.WithDeviceID(c.Request.Context(), ident.DeviceID)
-		ctx = ctxx.WithDeviceUID(ctx, ident.DeviceUID)
+		ctx := ctxdev.WithDeviceID(c.Request.Context(), ident.DeviceID)
+		ctx = ctxdev.WithDeviceUID(ctx, ident.DeviceUID)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()

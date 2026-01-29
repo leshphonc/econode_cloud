@@ -16,7 +16,7 @@ type HTTPServer struct {
 }
 
 func New(port string, app *Container, l *zap.Logger) *HTTPServer {
-	// Create server handler
+	// Report server handler
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.Cors())

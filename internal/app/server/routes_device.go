@@ -2,26 +2,27 @@ package server
 
 import (
 	"econode-cloud/internal/app/device"
+	"econode-cloud/internal/app/event"
 
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterDeviceRoutes(api *gin.RouterGroup, h *device.Handler, auth gin.HandlerFunc) {
+func RegisterDeviceRoutes(api *gin.RouterGroup, devH *device.Handler, evtH *event.Handler, auth gin.HandlerFunc) {
 
 	dev := api.Group("/device")
 	{
 		// 注册
-		dev.POST("/register", h.Register)
-		dev.POST("/activate", h.Activate)
+		dev.POST("/register", devH.Register)
+		dev.POST("/activate", devH.Activate)
 	}
 
 	authDev := dev.Use(auth)
 	{
 		// 心跳
-		authDev.POST("/heartbeat", h.Heartbeat)
+		authDev.POST("/heartbeat", devH.Heartbeat)
 
 		// 事件
-		//authDev.POST("/event", h.Event)
+		authDev.POST("/event", evtH.Report)
 
 		// 命令
 		//authDev.GET("/commands", h.PullCommands)

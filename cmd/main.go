@@ -7,6 +7,7 @@ import (
 	"econode-cloud/internal/infra/db"
 	"econode-cloud/internal/infra/log"
 	"econode-cloud/internal/infra/redis"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +15,9 @@ import (
 )
 
 func main() {
+
+	fmt.Println(time.Now().UnixMilli())
+
 	// 加载配置文件
 	cfg, err := config.Load()
 	if err != nil {

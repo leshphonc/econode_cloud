@@ -2,7 +2,7 @@ package device
 
 import (
 	"econode-cloud/api/v1/device"
-	devctx "econode-cloud/internal/app/device/ctxx"
+	"econode-cloud/internal/app/device/ctxdev"
 	"econode-cloud/internal/infra/http/resp"
 	"econode-cloud/internal/pkg/bizerr"
 	"econode-cloud/internal/pkg/ctxx"
@@ -40,7 +40,7 @@ func (h *Handler) Activate(c *gin.Context) {
 		return
 	}
 
-	dev, err := h.deviceService.Activate(c.Request.Context(), ActivateParams{
+	dev, err := h.deviceService.Activate(c.Request.Context(), ClaimParams{
 		SerialNo:  req.SerialNo,
 		Model:     req.Model,
 		PowerMode: req.PowerMode,
@@ -77,7 +77,7 @@ func (h *Handler) Heartbeat(c *gin.Context) {
 	}
 
 	err := h.deviceService.Heartbeat(c.Request.Context(), HeartbeatParams{
-		DeviceID:     devctx.DeviceID(c.Request.Context()),
+		DeviceID:     ctxdev.DeviceID(c.Request.Context()),
 		ReportedAtMs: req.ReportedAtMs,
 		Meta:         req.Meta,
 	})
