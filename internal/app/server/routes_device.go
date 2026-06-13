@@ -22,7 +22,7 @@ func RegisterDeviceRoutes(api *gin.RouterGroup, devH *device.Handler, evtH *even
 		authDev.POST("/heartbeat", devH.Heartbeat)
 
 		// 事件
-		authDev.POST("/event", evtH.Report)
+		authDev.POST("/events", evtH.Report)
 
 		// 命令
 		//authDev.GET("/commands", h.PullCommands)
